@@ -1516,3 +1516,71 @@ class Graph():
             else:
                 fp.write(tabulate(ptable, headers=header))
             fp.close()
+
+    def print_op_histogram(self, f: str = None):
+        if not self.valid_profile:
+            warnings.warn('Please perform a valid profile() before print_node_map().')
+            return
+        from tabulate import tabulate
+        forward_macs = int(round(self.macs[0]))
+        params = int(self.params)
+        memory = int(self.memory)
+
+        params += 1e-18
+        forward_macs += 1e-18
+        op_counter = dict()
+        op_counter['TOTAL']=numpy.zeros((6,),dtype=float)
+        for key in self.nodemap.keys():
+            node = self.nodemap[key]
+            op_counter.setdefault(node.op_type, numpy.zeros((6,),dtype=float))
+            node_stats = numpy.array([
+                node.macs[0],
+                node.macs[0] / forward_macs,
+                node.memory,
+                node.memory / memory,
+                node.params,
+                node.params / params
+            ])
+            op_counter[node.op_type] += node_stats
+            op_counter['TOTAL'] += node_stats
+
+        ptable = []
+        header = ['OpType',
+                  'MACs',
+                  'MACs(%)',
+                  'Memory',
+                  'Memory(%)',
+                  'Params',
+                  'Params(%)',
+                  ]
+        op_rank = sorted(op_counter.items(), key=lambda v:v[1][1], reverse=True)
+        for op_type, _ in op_rank:
+            row = [op_type]
+            op_stats = op_counter[op_type].tolist()
+            for i, stat in enumerate(op_stats):
+                if i%2==0:
+                    row.append('{:}'.format(int(stat)))
+                else:
+                    row.append('{:.2%}'.format(stat))
+            ptable.append(row)
+
+        print(tabulate(ptable, headers=header))
+        fp = open(f, 'w')
+        headerstr = ''
+        for i, item in enumerate(header):
+            headerstr += item
+            if i < len(header) - 1:
+                headerstr += ','
+        headerstr += '\n'
+        fp.write(headerstr)
+        for row in ptable:
+            str = ''
+            for i, ele in enumerate(row):
+                str += ele
+                if i != len(row) - 1:
+                    str += ','
+            str += '\n'
+            fp.write(str)
+
+
+
